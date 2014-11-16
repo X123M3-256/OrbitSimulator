@@ -314,6 +314,36 @@ spacecraft_t* simulation_new_spacecraft(simulation_t* sim)
 return sim->spacecraft+(sim->num_spacecraft++);
 }
 
+void simulation_render_lagrange_points(simulation_t* sim,celestial_body_t* secondary)
+{
+vector_t lagrange_points[5];
+vector_t rel_position=vector_subtract(secondary->base.position,secondary->orbit.primary->base.position);
+vector_t direction=vector_normalize(rel_position);
+float a=secondary->base.mass/(secondary->base.mass+secondary->orbit.primary->base.mass);
+
+float offset=powf(a*0.3333333,0.333333);
+lagrange_points[0]=vector_multiply(secondary->orbit.semi_major_axis*(1+offset),direction);
+lagrange_points[1]=vector_multiply(secondary->orbit.semi_major_axis*(1-offset),direction);
+lagrange_points[2]=vector_multiply(-secondary->orbit.semi_major_axis*(1+(5.0/12.0)*a),direction);
+
+lagrange_points[3].x=rel_position.x*cos(M_PI/3)+rel_position.y*sin(M_PI/3);
+lagrange_points[3].y=rel_position.x*-sin(M_PI/3)+rel_position.y*cos(M_PI/3);
+
+lagrange_points[4].x=rel_position.x*cos(-M_PI/3)+rel_position.y*sin(-M_PI/3);
+lagrange_points[4].y=rel_position.x*-sin(-M_PI/3)+rel_position.y*cos(-M_PI/3);
+
+int i;
+    for(i=0;i<5;i++)
+    {
+    char str[128];
+    sprintf(str,"%s-%s L%d point",secondary->orbit.primary->name,secondary->name,i+1);
+    vector_t screen_pos=vector_transform(vector_add(secondary->orbit.primary->base.position,lagrange_points[i]),sim->camera);
+    draw_cross(screen_pos,get_color(0,0,255));
+    draw_text(screen_pos.x+10,screen_pos.y,str);
+    }
+
+}
+
 void simulation_render(simulation_t* sim)
 {
 const color_t red=get_color(255,0,0);
@@ -356,7 +386,11 @@ int i;
 	for(i=0;i<sim->num_celestial_bodies;i++)
 	{
 	//Show orbit
-		if(sim->celestial_bodies[i].orbit.primary!=NULL)orbit_show(&sim->celestial_bodies[i].orbit,sim->camera,get_color(255,255,0));
+		if(sim->celestial_bodies[i].orbit.primary!=NULL)
+        {
+        orbit_show(&sim->celestial_bodies[i].orbit,sim->camera,get_color(255,255,0));
+        simulation_render_lagrange_points(sim,&sim->celestial_bodies[i]);
+        }
 	//Draw planet
 	object_render((object_t*)(&sim->celestial_bodies[i]),sim->camera);
 	//Show name
@@ -519,9 +553,14 @@ spacecraft->base.mass=spacecraft->dry_mass+spacecraft->fuel;
 void spacecraft_generate(simulation_t* sim)
 {
 spacecraft_t* upper_stage=upper_stage_generate(sim);
-spacecraft_t* lower_stage=lower_stage_generate(sim);
-spacecraft_dock(lower_stage,0,upper_stage,0);
-sim->current_spacecraft=lower_stage;
+
+orbit_t orbit=orbit_create(&sim->celestial_bodies[3],sim->celestial_bodies[3].radius+200e3,0,0);
+upper_stage->base.position=orbit_get_position(&orbit,0);
+upper_stage->base.velocity=orbit_get_velocity_vector(&orbit,0);
+upper_stage->base.rotation=M_PI;
+//spacecraft_t* lower_stage=lower_stage_generate(sim);
+//spacecraft_dock(lower_stage,0,upper_stage,0);
+sim->current_spacecraft=upper_stage;
 }
 
 
